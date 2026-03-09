@@ -1,0 +1,68 @@
+services:
+  nginx:
+    image: nginx:1.27
+    volumes:
+      - ./:/var/www
+      - ./.docker/nginx/conf.d:/etc/nginx/conf.d
+    ports:
+      - "${NGINX_HOST_PORT:-8876}:80"
+    depends_on:
+      - app
+    container_name: nginx_container
+    networks:
+      - sandbox_network
+
+  app:
+    build:
+      context: .
+      dockerfile: .docker/app/Dockerfile
+    volumes:
+      - ./:/var/www
+    container_name: app_container
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - sandbox_network
+    environment:
+      - DB_HOST=db
+      - DB_DATABASE=${DB_DATABASE}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+
+  db:
+    image: mysql:9.2
+    restart: unless-stopped
+    volumes:
+      - db_data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${MYSQL_HOST_PORT:-8200}:3306"
+    command: mysqld --character-set-server=utf8 --collation-server=utf8_unicode_ci
+    container_name: db_container
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - sandbox_network
+
+  adminer:
+    image: adminer:4.8.1
+    restart: unless-stopped
+    container_name: adminer_container
+    ports:
+      - "${ADMINER_HOST_PORT:-8080}:8080"
+    networks:
+      - sandbox_network
+    depends_on:
+      - db
+
+volumes:
+  db_data:
+
+networks:
+  sandbox_network:
